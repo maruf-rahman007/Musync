@@ -7,6 +7,7 @@ A Chrome/Browser extension that integrates YouTube listening with Spotify playli
     Later, the extension will also suggest songs from the user's Spotify playlists while they are watching YouTube. For example, if a user frequently adds Bangla songs to a playlist called "Bangla Music", the extension can suggest another song from that playlist as the next video to play on YouTube.
 
 ## System Architecture
+```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              CLIENT LAYER                                    │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
@@ -56,3 +57,4 @@ A Chrome/Browser extension that integrates YouTube listening with Spotify playli
 │  └─────────────────────────┘    └─────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────┘
 
+```
