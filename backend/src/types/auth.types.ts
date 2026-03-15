@@ -51,3 +51,9 @@ export interface SpotifyUserProfile {
     width: number | null;
   }[];
 }
+ export interface SpotifyUser {
+  id: string;
+  display_name: string;
+  email: string;
+  // add more fields if needed
+}

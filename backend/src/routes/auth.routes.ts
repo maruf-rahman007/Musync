@@ -6,74 +6,73 @@ const router = Router();
 
 // 1. Start Login Flow
 router.get('/login', (req: Request, res: Response) => {
-    console.log("Running login flow");
-  // Generate a unique ID for this user/session
-  // In production, this should be tied to a database user ID
+  console.log("[LOGIN] Starting Spotify OAuth flow");
   const userId = uuidv4();
   
-  // Generate the Spotify Authorization URL
   const authUrl = getAuthUrl(userId);
+  console.log("[LOGIN] Redirecting to:", authUrl);
   
-  // Redirect the user to Spotify
   res.redirect(authUrl);
 });
 
 // 2. Callback from Spotify
 router.get('/callback', async (req: Request, res: Response) => {
   const { code, state, error } = req.query;
-    console.log("Callback received:", { code, state, error });
+  
+  console.log("[CALLBACK] Received:", { code: !!code, state, error });
+
   if (error) {
-    return res.status(400).send(`Error: ${error}`);
+    console.error("[CALLBACK] Spotify error:", error);
+    return res.status(400).send(`Spotify login error: ${error}`);
   }
 
-  // 'state' contains the userId we sent earlier
+  if (!code || !state) {
+    return res.status(400).send('Missing code or state parameter');
+  }
+
   const userId = state as string;
-
-  if (!code || !userId) {
-    return res.status(400).send('Missing code or state');
-  }
 
   const result = await exchangeCodeForToken(code as string, userId);
 
   if (!result.success) {
-    return res.status(500).send('Authentication failed');
+    console.error("[CALLBACK] Token exchange failed");
+    return res.status(500).send('Authentication failed - token exchange error');
   }
 
-  // SUCCESS
-  // Set an HTTP-only cookie with the userId (Session approach)
+  console.log(`[CALLBACK] Success - setting cookie for userId: ${userId}`);
+
   res.cookie('spotify_user_id', userId, { 
-    httpOnly: true, 
-    secure: false, // Set to true if you are on HTTPS (Production)
+    httpOnly: true,
+    secure: false,           // localhost = false, production = true + HTTPS
     sameSite: 'lax',
-    maxAge: 24 * 60 * 60 * 1000 // 1 day
+    maxAge: 24 * 60 * 60 * 1000,
+    path: '/',               // ← critical
   });
 
-  // Redirect to a success page or close the window
+  console.log('[CALLBACK] Set-Cookie header sent');
+
+  // Clean success page that auto-closes
   res.send(`
-    <html>
-      <body>
-        <h1>Login Successful!</h1>
-        <p>Connecting to extension...</p>
-        <script>
-          // The ID of your extension (you can get this from chrome://extensions)
-          // We will use a wildcard or check if the API exists
-          if (chrome && chrome.runtime && chrome.runtime.sendMessage) {
-             // Attempt to send message to the extension ID
-             // You need to replace YOUR_EXTENSION_ID with the actual ID from chrome://extensions
-             // Or leave it open for localhost testing
-          } else {
-             // Fallback for when extension ID isn't known directly
-             document.body.innerHTML = '<h1>Login Successful!</h1><p>You can close this window and click the extension icon again.</p>';
-          }
-          
-          // A simple trick for local development:
-          // We set a flag in localStorage that the extension can check if needed
-          // But strictly, we just rely on cookies for the API calls.
-          window.close();
-        </script>
-      </body>
-    </html>
-  `);
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>Connected</title>
+    <style>body{font-family:sans-serif;text-align:center;padding:80px;background:#111;color:#fff;}</style>
+  </head>
+  <body>
+    <h1 style="color:#1ed760">Spotify Connected Successfully</h1>
+    <p>Returning to extension... (you can close this tab)</p>
+    <script>
+      // Give browser 3–4 seconds to store cookie before closing
+      setTimeout(() => {
+        if (window.close) window.close();
+        else alert('You can close this tab now');
+      }, 3500);
+    </script>
+  </body>
+  </html>
+`);
 });
 
 export default router;

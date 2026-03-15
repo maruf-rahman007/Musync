@@ -20,9 +20,7 @@ router.get('/playlists', isAuthenticated, async (req: Request, res: Response) =>
 
 // GET /api/search - Search for a track
 router.get('/search', isAuthenticated, async (req: Request, res: Response) => {
-    console.log("Search query received:");
-    const { q } = req.query;
-  
+  const { q } = req.query;
   if (!q) return res.status(400).json({ error: 'Query parameter q is required' });
 
   try {
@@ -37,8 +35,7 @@ router.get('/search', isAuthenticated, async (req: Request, res: Response) => {
 // POST /api/playlist/add - Add track to playlist
 router.post('/playlist/add', isAuthenticated, async (req: Request, res: Response) => {
   const { playlistId, trackUri } = req.body;
-  console.log("Adding track to playlist:", { playlistId, trackUri });
-
+  
   if (!playlistId || !trackUri) {
     return res.status(400).json({ error: 'Missing playlistId or trackUri' });
   }

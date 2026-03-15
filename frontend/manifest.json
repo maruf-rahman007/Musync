@@ -2,35 +2,28 @@
   "manifest_version": 3,
   "name": "YouTube to Spotify Integrator",
   "version": "1.0",
-  "description": "Add YouTube songs to Spotify playlists and get suggestions.",
+  "description": "Add YouTube songs to Spotify playlists",
   "permissions": [
     "storage",
-    "tabs"
+    "tabs",
+    "cookies"
   ],
   "host_permissions": [
-    "http://127.0.0.1:3000/*"
+    "http://127.0.0.1:3000/*",
+    "https://www.youtube.com/*"
   ],
   "action": {
-    "default_popup": "popup.html",
-    "default_icon": {
-      "16": "icon.png",
-      "48": "icon.png",
-      "128": "icon.png"
-    }
+    "default_popup": "popup.html"
   },
   "content_scripts": [
     {
-      "matches": ["*://www.youtube.com/watch*"],
+      "matches": ["*://www.youtube.com/*"],
       "js": ["content.js"],
-      "css": ["styles.css"]
+      "css": ["styles.css"],
+      "run_at": "document_idle"
     }
   ],
   "background": {
     "service_worker": "background.js"
-  },
-  "icons": {
-    "16": "icon.png",
-    "48": "icon.png",
-    "128": "icon.png"
   }
 }

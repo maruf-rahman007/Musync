@@ -1,29 +1,6 @@
 // content.js
-// ─────────────────────────────────────────────────────────────────────────────
-// Cache helpers (same as popup for consistency)
-// ─────────────────────────────────────────────────────────────────────────────
-async function getCache() {
-  return new Promise(resolve => {
-    chrome.storage.local.get(['spotifyCache'], (data) => {
-      const cache = data.spotifyCache;
-      if (cache && Date.now() - cache.cachedAt < 30 * 60 * 1000) {
-        resolve(cache);
-      } else {
-        resolve(null);
-      }
-    });
-  });
-}
 
-async function saveCache(user, playlists) {
-  await chrome.storage.local.set({
-    spotifyCache: { user, playlists, cachedAt: Date.now() }
-  });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 1. Parse song title
-// ─────────────────────────────────────────────────────────────────────────────
+// --- Parse Logic (Kept same) ---
 function parseSongTitle(title) {
   if (!title) return null;
   let cleaned = title
@@ -32,23 +9,24 @@ function parseSongTitle(title) {
     .replace(/\s+/g, ' ')
     .trim();
 
-  const patterns = [/^(.+?)\s*-\s*(.+)$/, /^(.+?)\s*:\s*(.+)$/, /^(.+?)\s*by\s*(.+)$/i];
-  for (const regex of patterns) {
-    const match = cleaned.match(regex);
-    if (match) {
-      let [, p1, p2] = match;
+  const patterns = [
+    /^(.+?)\s*-\s*(.+)$/,
+    /^(.+?)\s*:\s*(.+)$/,
+    /^(.+?)\s*by\s*(.+)$/i
+  ];
+
+  for (const re of patterns) {
+    const m = cleaned.match(re);
+    if (m) {
+      let [, p1, p2] = m;
       p1 = p1.trim(); p2 = p2.trim();
       return p1.length > p2.length * 2.5 ? { artist: p2, song: p1 } : { artist: p1, song: p2 };
     }
   }
-  const parts = cleaned.split(/\s*-\s*/);
-  if (parts.length >= 2) return { artist: parts[0].trim(), song: parts.slice(1).join(' - ').trim() };
   return null;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 2. Show Add Popup (now uses cache first!)
-// ─────────────────────────────────────────────────────────────────────────────
+// --- UI Logic ---
 function showAddPopup(song) {
   if (document.getElementById('add-popup')) return;
 
@@ -56,112 +34,94 @@ function showAddPopup(song) {
   popup.id = 'add-popup';
   popup.innerHTML = `
     <h3>Add to Spotify?</h3>
-    <div class="song-info"><strong>${song.song}</strong> <small>by ${song.artist}</small></div>
-    <select id="playlist-select"><option value="">Loading playlists...</option></select>
-    <div class="buttons">
-      <button id="add-btn">Add</button>
-      <button id="cancel-btn">Cancel</button>
+    <div style="margin:10px 0;">
+      <strong>${song.song}</strong><br>
+      <small>by ${song.artist}</small>
+    </div>
+    <select id="playlist-select" style="width:100%; padding:5px;">
+      <option value="">Loading...</option>
+    </select>
+    <div style="margin-top:12px;">
+      <button id="add-btn" style="background:#1DB954; color:white; border:none; padding:5px 10px; cursor:pointer;">Add</button>
+      <button id="cancel-btn" style="margin-left:8px; background:#555; color:white; border:none; padding:5px 10px; cursor:pointer;">Cancel</button>
     </div>
   `;
   document.body.appendChild(popup);
 
-  // Try cache first
-  getCache().then(cache => {
+  // Load playlists from Chrome Storage (set by popup)
+  chrome.storage.local.get(['spotifyCache'], (data) => {
     const select = document.getElementById('playlist-select');
-    if (cache && cache.playlists.length) {
-      select.innerHTML = '<option value="">Select a playlist...</option>';
-      cache.playlists.forEach(pl => {
+    if (data.spotifyCache?.playlists) {
+      select.innerHTML = '<option value="">Select playlist...</option>';
+      data.spotifyCache.playlists.forEach(pl => {
         const opt = document.createElement('option');
         opt.value = pl.id;
         opt.textContent = pl.name;
         select.appendChild(opt);
       });
     } else {
-      // Fallback fetch + save
-      fetch('http://127.0.0.1:3000/api/playlists', { credentials: 'include' })
-        .then(r => r.ok ? r.json() : Promise.reject())
-        .then(playlists => {
-          select.innerHTML = '<option value="">Select a playlist...</option>';
-          playlists.forEach(pl => {
-            const opt = document.createElement('option');
-            opt.value = pl.id;
-            opt.textContent = pl.name;
-            select.appendChild(opt);
-          });
-          // Save for future
-          getCache().then(c => saveCache(c?.user || {}, playlists));
-        })
-        .catch(() => select.innerHTML = '<option value="">Error loading playlists</option>');
+      select.innerHTML = '<option value="">Open Extension Popup first</option>';
     }
   });
 
-  // Add button logic (same as before, but with 401 handling)
-  document.getElementById('add-btn').addEventListener('click', () => {
-    console.log("Add button clicked");
+  // Add Button Logic
+  document.getElementById('add-btn').addEventListener('click', async () => {
     const playlistId = document.getElementById('playlist-select').value;
-    if (!playlistId) return alert('Select a playlist');
+    if (!playlistId) return alert('Select a playlist!');
 
     const query = `${song.artist} ${song.song}`;
-    console.log(query);
-    fetch(`http://127.0.0.1:3000/api/search?q=${encodeURIComponent(query)}`, { credentials: 'include' })
-      .then(r => r.ok ? r.json() : Promise.reject('Search failed'))
-      .then(track => {
-        if (!track.uri) throw new Error('Track not found');
-        return fetch('http://127.0.0.1:3000/api/playlist/add', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ playlistId, trackUri: track.uri })
-        });
-      })
-      .then(r => {
-        if (!r.ok) throw new Error(r.status === 401 ? 'Session expired' : 'Add failed');
-        alert('✅ Added to playlist!');
-        updateAddHistory(playlistId);
-        popup.remove();
-      })
-      .catch(err => {
-        if (err.message.includes('401') || err.message.includes('expired')) {
-          chrome.storage.local.remove('spotifyCache');
-          alert('Session expired. Open extension popup and click Refresh.');
+    const addBtn = document.getElementById('add-btn');
+    addBtn.textContent = "Searching...";
+    addBtn.disabled = true;
+
+    // Step 1: Search Track (via background)
+    chrome.runtime.sendMessage({ type: 'SEARCH_TRACK', query }, (searchRes) => {
+      if (!searchRes.success || !searchRes.track?.uri) {
+        alert('Song not found on Spotify.');
+        addBtn.textContent = "Add";
+        addBtn.disabled = false;
+        return;
+      }
+
+      const trackUri = searchRes.track.uri;
+
+      // Step 2: Add to Playlist (via background)
+      addBtn.textContent = "Adding...";
+      chrome.runtime.sendMessage({ type: 'ADD_TO_PLAYLIST', playlistId, trackUri }, (addRes) => {
+        if (addRes.success) {
+          alert('Added to playlist!');
+          popup.remove();
         } else {
-          alert('Error: ' + err.message);
+          alert('Failed to add: ' + (addRes.error || 'Unknown error'));
+          addBtn.textContent = "Add";
+          addBtn.disabled = false;
         }
       });
+    });
   });
 
   document.getElementById('cancel-btn').addEventListener('click', () => popup.remove());
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 3. History + detectVideo (unchanged from last version)
-// ─────────────────────────────────────────────────────────────────────────────
-function updateAddHistory(playlistId) {
-  chrome.storage.sync.get(['addHistory'], (result) => {
-    const history = result.addHistory || {};
-    history[playlistId] = (history[playlistId] || 0) + 1;
-    chrome.storage.sync.set({ addHistory: history });
-  });
-}
-
+// --- Detection Logic ---
 function detectVideo() {
   const videoId = new URLSearchParams(window.location.search).get('v');
-  if (!videoId || sessionStorage.getItem(`yt2spotify_processed_${videoId}`)) return;
+  if (!videoId) return;
+  if (sessionStorage.getItem(`yt2sp_${videoId}`)) return;
 
-  const titleElem = document.querySelector('h1.title yt-formatted-string, h1.title, h1.ytd-watch-metadata #title h1');
+  // YouTube title selectors change often, trying multiple
+  const titleElem = document.querySelector('h1.ytd-watch-metadata yt-formatted-string, h1.title yt-formatted-string');
+  
   if (!titleElem?.textContent) return;
 
   const song = parseSongTitle(titleElem.textContent.trim());
-  if (!song) return;
-
-  sessionStorage.setItem(`yt2spotify_processed_${videoId}`, 'true');
-  console.log('[YT→Spotify] Music detected:', song);
-  showAddPopup(song);
+  if (song) {
+    sessionStorage.setItem(`yt2sp_${videoId}`, 'true');
+    showAddPopup(song);
+  }
 }
 
-// Setup
+// Observer
 const observer = new MutationObserver(detectVideo);
-observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+observer.observe(document.body, { childList: true, subtree: true });
 detectVideo();
-
-window.addEventListener('beforeunload', () => observer.disconnect());

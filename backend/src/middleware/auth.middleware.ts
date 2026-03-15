@@ -3,18 +3,26 @@ import TokenStore from '../storage/token.store';
 import { refreshAccessToken } from '../services/spotify.service';
 
 export const isAuthenticated = async (req: Request, res: Response, next: NextFunction) => {
-    console.log("Authentication middleware triggered");
-    console.log("Request cookies:", req.cookies);
-  // Get userId from cookie
-  const userId = req.cookies['spotify_user_id'];
+  console.log("Authentication middleware triggered");
+
+  // 1. Try to get ID from Cookie (Browser Web Flow)
+  let userId = req.cookies['spotify_user_id'];
+
+  // 2. If no cookie, try to get ID from Custom Header (Extension Flow)
+  if (!userId) {
+    userId = req.headers['x-user-id'] as string;
+    console.log("No cookie found, checking headers. Found X-User-ID:", userId);
+  }
 
   if (!userId) {
+    console.log("Authentication failed: No ID found in cookies or headers.");
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
   let tokens = TokenStore.getToken(userId);
 
   if (!tokens) {
+    console.log("Authentication failed: Tokens not found in store for ID:", userId);
     return res.status(401).json({ error: 'Tokens not found, please login again' });
   }
 

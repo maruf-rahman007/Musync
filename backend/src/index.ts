@@ -11,6 +11,7 @@ dotenv.config();
 const app = express();
 
 app.get('/health', (req, res) => {
+    console.log("Health fine");
   res.json({ 
     message : "Backend is fine"
    });
@@ -19,14 +20,16 @@ app.get('/health', (req, res) => {
 app.use(cookieParser());
 app.use(express.json());
 app.use(cors({
-  origin: true,                    // reflects requesting origin (safer than *)
-  credentials: true,               // must be true for cookies
-  methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-  exposedHeaders: ['Set-Cookie'],  // if needed
+  origin: true,                 // let browser send origin → reflect it
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Accept'],
   preflightContinue: false,
   optionsSuccessStatus: 204
 }));
+
+// Explicit preflight handler (many credentialed issues fixed by this)
+app.options('*', cors());
 
 app.get('/api/test', isAuthenticated, async (req, res) => {
   // If we reach here, the middleware validated the token

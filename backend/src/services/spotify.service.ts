@@ -81,6 +81,7 @@ export const getUserPlaylists = async (accessToken: string) => {
     params: { limit: 50 }, // Get up to 50 playlists
     timeout: 10000,
   });
+  
   return response.data.items;
 };
 
@@ -113,12 +114,25 @@ export const searchTrack = async (accessToken: string, query: string) => {
  * Add a track to a specific playlist
  */
 export const addTrackToPlaylist = async (accessToken: string, playlistId: string, trackUri: string) => {
-  await axios.post(
-    `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
-    { uris: [trackUri] },
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
-  return { success: true };
+  try {
+    // Added timeout: 10000 (10 seconds) to prevent hanging
+    const res = await axios.post(
+      `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+      { uris: [trackUri] },
+      { 
+        headers: { Authorization: `Bearer ${accessToken}` },
+        timeout: 10000 
+      }
+    );
+    
+    console.log("Response from add track:", res.data);
+    return { success: true };
+    
+  } catch (error) {
+    // This will tell us if it's a timeout or a permission error
+    console.error("Error adding track:", error);
+    throw error; // Throw it so the route handler knows it failed
+  }
 };
 
 export const refreshAccessToken = async (userId: string): Promise<string | null> => {
